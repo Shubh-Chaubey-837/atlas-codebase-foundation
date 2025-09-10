@@ -1,4 +1,4 @@
-// Supabase Edge Function: documents-upload
+// Supabase Edge Function: documents-upload (v1.1)
 // Handles multipart file uploads, stores in Storage, inserts DB metadata,
 // extracts text from PDFs (pdf.js) and images (OCR via Tesseract), and
 // saves extracted text into file_content linked by file_id.
