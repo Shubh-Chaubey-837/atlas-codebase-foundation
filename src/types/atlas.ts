@@ -3,13 +3,14 @@
 export interface Document {
   id: string;
   name: string;
-  type: 'pdf' | 'image' | 'text';
+  type: 'pdf' | 'image' | 'text' | 'audio' | 'video' | 'other';
   size: number;
   uploadedAt: Date;
   processedAt?: Date;
   status: 'pending' | 'processing' | 'completed' | 'error';
   ocrText?: string;
   metadata?: Record<string, any>;
+  tags?: string[];
 }
 
 export interface AnalysisResult {

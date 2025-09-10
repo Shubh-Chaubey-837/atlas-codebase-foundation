@@ -63,12 +63,79 @@ export class AtlasAPI {
     }
   }
 
+  static async getFiles(params?: { limit?: number; offset?: number; search?: string }): Promise<APIResponse<{ files: Document[]; pagination: any; search_query?: string }>> {
+    try {
+      if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+        throw new Error('Supabase URL/Anon Key missing. Set them in src/lib/supabase-config.ts');
+      }
+
+      const searchParams = new URLSearchParams();
+      if (params?.limit) searchParams.set('limit', params.limit.toString());
+      if (params?.offset) searchParams.set('offset', params.offset.toString());  
+      if (params?.search) searchParams.set('search', params.search);
+
+      const url = `${SUPABASE_URL}/functions/v1/files?${searchParams.toString()}`;
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          apikey: SUPABASE_ANON_KEY,
+        },
+      });
+
+      if (!response.ok) {
+        const text = await response.text();
+        console.error('Files fetch failed:', response.status, text);
+        throw new Error(text || `Files fetch failed: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (data && data.success) {
+        const documents: Document[] = data.files.map((file: any) => ({
+          id: file.id.toString(),
+          name: file.filename,
+          type: file.file_type as 'pdf' | 'image' | 'text',
+          size: file.size,
+          uploadedAt: new Date(file.upload_date),
+          status: file.has_content ? 'completed' : 'pending',
+          ocrText: file.content_preview || undefined,
+          tags: file.tags || []
+        }));
+        
+        return {
+          success: true,
+          data: {
+            files: documents,
+            pagination: data.pagination,
+            search_query: data.search_query
+          }
+        };
+      } else {
+        throw new Error(data?.error || 'Failed to fetch files');
+      }
+    } catch (error) {
+      console.error('Files fetch error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to fetch files'
+      };
+    }
+  }
+
   static async getDocuments(): Promise<APIResponse<Document[]>> {
     try {
-      // For now, return empty array until we implement document fetching
+      const result = await this.getFiles();
+      if (result.success) {
+        return {
+          success: true,
+          data: result.data.files
+        };
+      }
       return {
-        success: true,
-        data: []
+        success: false,
+        error: result.error || 'Failed to fetch documents'
       };
     } catch (error) {
       throw new Error('Failed to fetch documents');
