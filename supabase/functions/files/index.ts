@@ -82,9 +82,71 @@ serve(async (req: Request) => {
     if (searchQuery && searchQuery.trim()) {
       const searchTerm = searchQuery.trim();
       
-      // Use PostgreSQL full-text search on content combined with filename search
       try {
-        const { data: searchResults, error: searchError } = await supabase
+        // 1) Match by content using Full-Text Search (websearch), then fallback to ILIKE for partials
+        const { data: contentMatchesWeb, error: contentErrWeb } = await supabase
+          .from('file_content')
+          .select('file_id')
+          .textSearch('search_vector', searchTerm, { type: 'websearch', config: 'english' });
+
+        let contentMatches = contentMatchesWeb || [];
+        if (contentErrWeb) {
+          console.error('Content websearch error:', contentErrWeb);
+        }
+
+        if (!contentMatches.length) {
+          const { data: contentMatchesIlike, error: contentErrIlike } = await supabase
+            .from('file_content')
+            .select('file_id')
+            .ilike('indexed_text', `%${searchTerm}%`);
+          if (contentErrIlike) {
+            console.error('Content ILIKE error:', contentErrIlike);
+          } else {
+            contentMatches = contentMatchesIlike || [];
+          }
+        }
+
+        // 2) Match by filename (ILIKE)
+        const { data: filenameMatches, error: filenameErr } = await supabase
+          .from('files')
+          .select('id')
+          .ilike('filename', `%${searchTerm}%`);
+        if (filenameErr) {
+          console.error('Filename search error:', filenameErr);
+        }
+
+        // Combine and de-duplicate IDs
+        const contentIds = new Set((contentMatches || []).map((r: any) => r.file_id));
+        const filenameIds = new Set((filenameMatches || []).map((r: any) => r.id));
+        const allIds = Array.from(new Set([...contentIds, ...filenameIds])) as number[];
+
+        const totalMatches = allIds.length;
+
+        if (totalMatches === 0) {
+          return new Response(
+            JSON.stringify({
+              success: true,
+              files: [],
+              pagination: {
+                limit,
+                offset,
+                total: 0,
+                has_more: false
+              },
+              search_query: searchQuery
+            }), 
+            { 
+              status: 200, 
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+            }
+          );
+        }
+
+        // Pagination over matched IDs
+        const pageIds = allIds.slice(offset, offset + limit);
+
+        // 3) Fetch page of files with joined content and tags
+        const { data: pageFiles, error: pageErr } = await supabase
           .from('files')
           .select(`
             id,
@@ -94,9 +156,8 @@ serve(async (req: Request) => {
             upload_date,
             storage_path,
             user_id,
-            file_content!inner (
-              indexed_text,
-              search_vector
+            file_content (
+              indexed_text
             ),
             file_tags (
               tags (
@@ -104,63 +165,58 @@ serve(async (req: Request) => {
               )
             )
           `)
-          .or(`filename.ilike.%${searchTerm}%,file_content.search_vector.fts.${searchTerm}`)
-          .order('upload_date', { ascending: false })
-          .range(offset, offset + limit - 1);
+          .in('id', pageIds)
+          .order('upload_date', { ascending: false });
 
-        if (!searchError && searchResults) {
-          // Transform search results and return early
-          const formattedFiles = searchResults.map(file => {
-            const content = Array.isArray(file.file_content)
-              ? file.file_content[0]?.indexed_text
-              : file.file_content?.indexed_text;
-            const tags = Array.isArray(file.file_tags)
-              ? file.file_tags.map((ft: any) => ft?.tags?.tag_name).filter(Boolean)
-              : [];
-            return {
-              id: file.id,
-              filename: file.filename,
-              file_type: file.file_type,
-              size: file.size,
-              upload_date: file.upload_date,
-              storage_path: file.storage_path,
-              user_id: file.user_id,
-              has_content: !!content,
-              content_preview: content ? String(content).substring(0, 150) + '...' : null,
-              tags,
-            };
-          });
-
-          // Get search count
-          const { count: searchCount } = await supabase
-            .from('files')
-            .select('*', { count: 'exact', head: true })
-            .or(`filename.ilike.%${searchTerm}%,file_content.search_vector.fts.${searchTerm}`);
-
-          console.log(`Search returned ${formattedFiles.length} files (total matches: ${searchCount || 'unknown'})`);
-
+        if (pageErr) {
+          console.error('Fetch page files error:', pageErr);
           return new Response(
-            JSON.stringify({
-              success: true,
-              files: formattedFiles,
-              pagination: {
-                limit,
-                offset,
-                total: searchCount || 0,
-                has_more: searchCount ? (offset + limit) < searchCount : false
-              },
-              search_query: searchQuery
-            }), 
+            JSON.stringify({ error: 'Failed to fetch search results', details: pageErr.message }), 
             { 
-              status: 200, 
+              status: 500, 
               headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
             }
           );
-        } else {
-          console.error('Full-text search failed, falling back to filename search:', searchError);
-          // Fallback to filename-only search
-          query = query.ilike('filename', `%${searchTerm}%`);
         }
+
+        const formattedFiles = (pageFiles || []).map(file => {
+          const content = Array.isArray(file.file_content)
+            ? file.file_content[0]?.indexed_text
+            : file.file_content?.indexed_text;
+          const tags = Array.isArray(file.file_tags)
+            ? file.file_tags.map((ft: any) => ft?.tags?.tag_name).filter(Boolean)
+            : [];
+          return {
+            id: file.id,
+            filename: file.filename,
+            file_type: file.file_type,
+            size: file.size,
+            upload_date: file.upload_date,
+            storage_path: file.storage_path,
+            user_id: file.user_id,
+            has_content: !!content,
+            content_preview: content ? String(content).substring(0, 150) + '...' : null,
+            tags,
+          };
+        });
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            files: formattedFiles,
+            pagination: {
+              limit,
+              offset,
+              total: totalMatches,
+              has_more: (offset + limit) < totalMatches
+            },
+            search_query: searchQuery
+          }), 
+          { 
+            status: 200, 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          }
+        );
       } catch (searchErr) {
         console.error('Search error, falling back to filename search:', searchErr);
         // Fallback to filename-only search
