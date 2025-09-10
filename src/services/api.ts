@@ -1,5 +1,5 @@
 import { APIResponse, Document, AnalysisResult } from '@/types/atlas';
-import { supabase } from '@/lib/supabase';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/supabase-config';
 
 export class AtlasAPI {
   // Document Management
@@ -9,18 +9,32 @@ export class AtlasAPI {
     if (userId) formData.append('user_id', userId);
     
     try {
-      // Call the Supabase Edge Function using the client
-      const { data, error } = await supabase.functions.invoke('documents-upload', {
+      if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+        throw new Error('Supabase URL/Anon Key missing. Set them in src/lib/supabase-config.ts');
+      }
+
+      const url = `${SUPABASE_URL}/functions/v1/documents-upload`;
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          apikey: SUPABASE_ANON_KEY,
+          // Do not set Content-Type when sending FormData
+        } as any,
         body: formData,
       });
-      
-      console.log('Upload response:', data, error);
-      
-      if (error) {
-        console.error('Upload failed:', error);
-        throw new Error(error.message || 'Upload failed');
+
+      if (!response.ok) {
+        const text = await response.text();
+        console.error('Upload failed:', response.status, text);
+        throw new Error(text || `Upload failed: ${response.status}`);
       }
-      
+
+      const data = await response.json();
+
+      console.log('Upload response:', data);
+
       if (data && data.success) {
         const document: Document = {
           id: data.file_id.toString(),
