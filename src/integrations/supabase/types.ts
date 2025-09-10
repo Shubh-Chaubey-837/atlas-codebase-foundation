@@ -84,7 +84,7 @@ export type Database = {
           size: number
           storage_path: string
           upload_date: string
-          user_id: number
+          user_id: number | null
         }
         Insert: {
           file_type?: Database["public"]["Enums"]["file_type_enum"]
@@ -93,7 +93,7 @@ export type Database = {
           size: number
           storage_path: string
           upload_date?: string
-          user_id: number
+          user_id?: number | null
         }
         Update: {
           file_type?: Database["public"]["Enums"]["file_type_enum"]
@@ -102,7 +102,7 @@ export type Database = {
           size?: number
           storage_path?: string
           upload_date?: string
-          user_id?: number
+          user_id?: number | null
         }
         Relationships: [
           {
