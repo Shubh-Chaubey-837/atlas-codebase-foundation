@@ -131,6 +131,59 @@ export class AtlasAPI {
     }
   }
 
+  // Search functionality
+  static async searchFiles(query: string): Promise<APIResponse<Document[]>> {
+    try {
+      if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+        throw new Error('Supabase URL/Anon Key missing. Set them in src/lib/supabase-config.ts');
+      }
+
+      const url = `${SUPABASE_URL}/functions/v1/search?q=${encodeURIComponent(query)}`;
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          apikey: SUPABASE_ANON_KEY,
+        },
+      });
+
+      if (!response.ok) {
+        const text = await response.text();
+        console.error('Search failed:', response.status, text);
+        throw new Error(text || `Search failed: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (data && data.success) {
+        const documents: Document[] = data.results.map((result: any) => ({
+          id: result.id.toString(),
+          name: result.filename,
+          type: result.file_type as 'pdf' | 'image' | 'text',
+          size: result.size,
+          uploadedAt: new Date(result.upload_date),
+          status: result.has_content ? 'completed' : 'pending',
+          ocrText: result.content_preview || undefined,
+        }));
+        
+        return {
+          success: true,
+          data: documents,
+          message: `Found ${data.total_count} results for "${query}"`
+        };
+      } else {
+        throw new Error(data?.error || 'Search failed');
+      }
+    } catch (error) {
+      console.error('Search error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to search files'
+      };
+    }
+  }
+
   // Dashboard Data
   static async getDashboardData(): Promise<APIResponse<any>> {
     try {
