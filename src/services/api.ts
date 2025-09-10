@@ -1,9 +1,10 @@
 import axios from 'axios';
 import { APIResponse, Document, AnalysisResult } from '@/types/atlas';
 
-// Configure axios with Supabase URL (to be configured later)
+// Configure axios with Supabase Edge Functions URL
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const api = axios.create({
-  baseURL: '/api', // This will be configured with Supabase Edge Functions
+  baseURL: `${SUPABASE_URL}/functions/v1`,
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
@@ -29,17 +30,42 @@ api.interceptors.response.use(
 
 export class AtlasAPI {
   // Document Management
-  static async uploadDocument(file: File): Promise<APIResponse<Document>> {
+  static async uploadDocument(file: File, userId?: string): Promise<APIResponse<Document>> {
     const formData = new FormData();
     formData.append('file', file);
+    if (userId) formData.append('user_id', userId);
     
     try {
-      const response = await api.post('/documents/upload', formData, {
+      const response = await api.post('/documents-upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      return response.data;
+      
+      // Transform the Edge Function response to match our Document type
+      const edgeResponse = response.data;
+      if (edgeResponse.success) {
+        const document: Document = {
+          id: edgeResponse.file_id.toString(),
+          name: file.name,
+          type: edgeResponse.file_type as 'pdf' | 'image' | 'text',
+          size: edgeResponse.bytes,
+          uploadedAt: new Date(),
+          status: edgeResponse.extracted ? 'completed' : 'pending',
+          ocrText: edgeResponse.extracted ? 'Text extracted' : undefined,
+        };
+        
+        return {
+          success: true,
+          data: document,
+          message: 'Document uploaded successfully'
+        };
+      } else {
+        throw new Error(edgeResponse.error || 'Upload failed');
+      }
     } catch (error) {
-      throw new Error('Failed to upload document');
+      return {
+        success: false,
+        error: 'Failed to upload document'
+      };
     }
   }
 
