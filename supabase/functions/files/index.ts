@@ -30,9 +30,9 @@ serve(async (req: Request) => {
 
   try {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
-    const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
       return new Response(
         JSON.stringify({ error: "Supabase environment not configured" }), 
         { 
@@ -48,10 +48,8 @@ serve(async (req: Request) => {
     const offset = parseInt(url.searchParams.get('offset') || '0');
     const searchQuery = url.searchParams.get('search');
 
-    const authHeader = req.headers.get("Authorization");
-    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
       global: { fetch },
-      headers: authHeader ? { Authorization: authHeader } : undefined,
     });
 
     console.log(`Fetching files: limit=${limit}, offset=${offset}, search=${searchQuery || 'none'}`);
@@ -82,7 +80,7 @@ serve(async (req: Request) => {
     // Add search filter if provided
     if (searchQuery && searchQuery.trim()) {
       const searchTerm = searchQuery.trim();
-      query = query.or(`filename.ilike.*${searchTerm}*,file_content.indexed_text.ilike.*${searchTerm}*`);
+      query = query.ilike('filename', `%${searchTerm}%`);
     }
 
     const { data: files, error: filesError } = await query;
@@ -105,7 +103,7 @@ serve(async (req: Request) => {
 
     if (searchQuery && searchQuery.trim()) {
       const searchTerm = searchQuery.trim();
-      countQuery = countQuery.or(`filename.ilike.*${searchTerm}*,file_content.indexed_text.ilike.*${searchTerm}*`);
+      countQuery = countQuery.ilike('filename', `%${searchTerm}%`);
     }
 
     const { count, error: countError } = await countQuery;
