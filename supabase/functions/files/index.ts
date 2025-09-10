@@ -82,7 +82,7 @@ serve(async (req: Request) => {
     // Add search filter if provided
     if (searchQuery && searchQuery.trim()) {
       const searchTerm = searchQuery.trim();
-      query = query.or(`filename.ilike.%${searchTerm}%,file_content.indexed_text.ilike.%${searchTerm}%`);
+      query = query.or(`filename.ilike.*${searchTerm}*,file_content.indexed_text.ilike.*${searchTerm}*`);
     }
 
     const { data: files, error: filesError } = await query;
@@ -105,7 +105,7 @@ serve(async (req: Request) => {
 
     if (searchQuery && searchQuery.trim()) {
       const searchTerm = searchQuery.trim();
-      countQuery = countQuery.or(`filename.ilike.%${searchTerm}%,file_content.indexed_text.ilike.%${searchTerm}%`);
+      countQuery = countQuery.or(`filename.ilike.*${searchTerm}*,file_content.indexed_text.ilike.*${searchTerm}*`);
     }
 
     const { count, error: countError } = await countQuery;
