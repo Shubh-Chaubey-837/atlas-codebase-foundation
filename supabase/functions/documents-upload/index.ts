@@ -195,40 +195,48 @@ serve(async (req: Request) => {
       extractedText = await extractImageText(fileBytes);
     }
 
-    if (extractedText && extractedText.length > 0) {
+    // Fallback to filename (without extension) when no text extracted
+    const filenameNoExt = file.name.replace(/\.[^/.]+$/, "");
+    const textForIndex = (extractedText && extractedText.trim().length > 0) ? extractedText : filenameNoExt;
+
+    // Always insert into file_content so search works and tagging can run
+    try {
       const { error: fcErr } = await admin
         .from("file_content")
-        .insert({ file_id: fileId, indexed_text: extractedText });
+        .insert({ file_id: fileId, indexed_text: textForIndex });
       if (fcErr) {
         console.error("file_content insert failed", fcErr);
-      } else {
-        // Auto-tag the file after successful text extraction
-        try {
-          console.log(`Starting auto-tagging for file ${fileId}`);
-          const tagResponse = await fetch(`${SUPABASE_URL}/functions/v1/auto-tag-file`, {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              file_id: fileId,
-              file_text: extractedText
-            }),
-          });
-          
-          if (tagResponse.ok) {
-            const tagResult = await tagResponse.json();
-            console.log(`Auto-tagging completed for file ${fileId}:`, tagResult);
-          } else {
-            console.error(`Auto-tagging failed for file ${fileId}:`, tagResponse.status);
-          }
-        } catch (tagError) {
-          console.error(`Auto-tagging error for file ${fileId}:`, tagError);
-          // Don't fail the upload if tagging fails
-        }
       }
+    } catch (e) {
+      console.error("file_content insert exception", e);
     }
+
+    // Auto-tag the file using whatever text we have
+    try {
+      console.log(`Starting auto-tagging for file ${fileId}`);
+      const tagResponse = await fetch(`${SUPABASE_URL}/functions/v1/auto-tag-file`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          file_id: fileId,
+          file_text: textForIndex
+        }),
+      });
+      
+      if (tagResponse.ok) {
+        const tagResult = await tagResponse.json();
+        console.log(`Auto-tagging completed for file ${fileId}:`, tagResult);
+      } else {
+        console.error(`Auto-tagging failed for file ${fileId}:`, tagResponse.status);
+      }
+    } catch (tagError) {
+      console.error(`Auto-tagging error for file ${fileId}:`, tagError);
+      // Don't fail the upload if tagging fails
+    }
+
 
     return new Response(
       JSON.stringify({

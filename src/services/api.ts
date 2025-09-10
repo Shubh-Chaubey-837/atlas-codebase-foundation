@@ -42,8 +42,8 @@ export class AtlasAPI {
           type: data.file_type as 'pdf' | 'image' | 'text',
           size: data.bytes,
           uploadedAt: new Date(),
-          status: data.extracted_text ? 'completed' : 'pending',
-          ocrText: data.extracted_text || undefined,
+          status: data.extracted ? 'completed' : 'pending',
+          ocrText: undefined,
         };
         
         return {

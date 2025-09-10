@@ -41,6 +41,13 @@ export type Database = {
             referencedRelation: "files"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "fk_file_content_file_id"
+            columns: ["file_id"]
+            isOneToOne: true
+            referencedRelation: "files"
+            referencedColumns: ["id"]
+          },
         ]
       }
       file_tags: {
@@ -69,6 +76,20 @@ export type Database = {
           },
           {
             foreignKeyName: "file_tags_tag_id_fkey"
+            columns: ["tag_id"]
+            isOneToOne: false
+            referencedRelation: "tags"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_file_tags_file_id"
+            columns: ["file_id"]
+            isOneToOne: false
+            referencedRelation: "files"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_file_tags_tag_id"
             columns: ["tag_id"]
             isOneToOne: false
             referencedRelation: "tags"
