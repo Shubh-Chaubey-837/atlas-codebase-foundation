@@ -20,18 +20,21 @@ export type Database = {
           file_id: number
           id: number
           indexed_text: string
+          search_vector: unknown | null
         }
         Insert: {
           created_at?: string
           file_id: number
           id?: number
           indexed_text: string
+          search_vector?: unknown | null
         }
         Update: {
           created_at?: string
           file_id?: number
           id?: number
           indexed_text?: string
+          search_vector?: unknown | null
         }
         Relationships: [
           {

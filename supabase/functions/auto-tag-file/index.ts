@@ -14,34 +14,81 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-// Predefined keyword-based tag mappings for fast classification
-const KEYWORD_TAGS = {
-  'invoice': ['invoice', 'bill', 'payment', 'due date', 'total', 'subtotal', 'tax', 'amount due', 'billing'],
-  'contract': ['contract', 'agreement', 'terms', 'conditions', 'signature', 'party', 'clause', 'obligations'],
-  'receipt': ['receipt', 'purchase', 'transaction', 'refund', 'payment received', 'store'],
-  'report': ['report', 'analysis', 'summary', 'findings', 'conclusion', 'data', 'statistics'],
-  'legal': ['legal', 'law', 'attorney', 'court', 'litigation', 'lawsuit', 'defendant', 'plaintiff'],
-  'financial': ['financial', 'budget', 'revenue', 'profit', 'loss', 'quarterly', 'annual', 'fiscal'],
-  'medical': ['medical', 'health', 'patient', 'diagnosis', 'treatment', 'doctor', 'hospital', 'prescription'],
-  'insurance': ['insurance', 'policy', 'premium', 'claim', 'coverage', 'deductible', 'beneficiary'],
-  'tax': ['tax', 'irs', '1099', 'w2', 'deduction', 'withholding', 'refund', 'filing'],
-  'hr': ['employee', 'payroll', 'benefits', 'vacation', 'hr', 'human resources', 'personnel'],
-};
-
-async function identifyTagsWithKeywords(text: string): Promise<string[]> {
-  const foundTags: string[] = [];
-  const lowerText = text.toLowerCase();
+// Advanced keyword extraction using RAKE-like algorithm (free alternative to OpenAI)
+function extractKeywordsAndTags(text: string): string[] {
+  if (!text || text.trim().length === 0) return [];
   
-  for (const [tag, keywords] of Object.entries(KEYWORD_TAGS)) {
-    const matchCount = keywords.filter(keyword => lowerText.includes(keyword)).length;
-    // If at least 2 keywords match, or 1 keyword for shorter lists, include the tag
-    const threshold = keywords.length > 5 ? 2 : 1;
-    if (matchCount >= threshold) {
-      foundTags.push(tag);
+  // Clean and normalize text
+  const cleanText = text.toLowerCase()
+    .replace(/[^\w\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  
+  // Common stop words to filter out
+  const stopWords = new Set([
+    'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'is', 'are', 'was', 'were', 'be', 'been', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'can', 'shall', 'must', 'this', 'that', 'these', 'those', 'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her', 'us', 'them', 'my', 'your', 'his', 'her', 'its', 'our', 'their'
+  ]);
+  
+  // Extract words and filter
+  const words = cleanText.split(' ')
+    .filter(word => word.length > 2 && !stopWords.has(word))
+    .filter(word => !/^\d+$/.test(word)); // Remove pure numbers
+  
+  // Count word frequencies
+  const wordFreq = new Map<string, number>();
+  words.forEach(word => {
+    wordFreq.set(word, (wordFreq.get(word) || 0) + 1);
+  });
+  
+  // Enhanced domain categorization with more comprehensive keywords
+  const domainKeywords = {
+    'technology': ['software', 'computer', 'programming', 'code', 'algorithm', 'database', 'api', 'javascript', 'python', 'react', 'nodejs', 'html', 'css', 'sql', 'github', 'git', 'framework', 'library', 'development', 'developer', 'tech', 'digital', 'cyber', 'network', 'server', 'cloud', 'aws', 'google', 'microsoft', 'apple', 'website', 'application', 'mobile', 'web', 'system', 'platform', 'service', 'infrastructure', 'security', 'encryption', 'protocol'],
+    'business': ['company', 'enterprise', 'corporation', 'business', 'finance', 'financial', 'revenue', 'profit', 'loss', 'investment', 'market', 'marketing', 'sales', 'customer', 'client', 'strategy', 'management', 'leadership', 'team', 'employee', 'budget', 'cost', 'expense', 'income', 'startup', 'entrepreneur', 'commerce', 'trade', 'industry', 'organization', 'partnership', 'acquisition', 'merger'],
+    'science': ['research', 'study', 'experiment', 'hypothesis', 'theory', 'data', 'analysis', 'statistics', 'biology', 'chemistry', 'physics', 'mathematics', 'medicine', 'health', 'medical', 'clinical', 'laboratory', 'scientific', 'academic', 'university', 'college', 'education', 'learning', 'knowledge', 'discovery', 'innovation', 'methodology', 'empirical', 'quantitative', 'qualitative'],
+    'legal': ['law', 'legal', 'court', 'judge', 'lawyer', 'attorney', 'contract', 'agreement', 'terms', 'conditions', 'policy', 'regulation', 'compliance', 'litigation', 'case', 'plaintiff', 'defendant', 'evidence', 'testimony', 'verdict', 'settlement', 'rights', 'liability', 'jurisdiction', 'statute', 'legislation', 'constitutional', 'judicial', 'arbitration'],
+    'finance': ['money', 'dollar', 'currency', 'bank', 'banking', 'account', 'loan', 'credit', 'debt', 'payment', 'transaction', 'invoice', 'receipt', 'tax', 'taxes', 'financial', 'finance', 'investment', 'stock', 'bond', 'portfolio', 'asset', 'liability', 'equity', 'cash', 'savings', 'insurance', 'mortgage', 'interest', 'dividend', 'capital', 'funding'],
+    'health': ['health', 'medical', 'doctor', 'hospital', 'clinic', 'patient', 'treatment', 'therapy', 'medicine', 'drug', 'prescription', 'diagnosis', 'symptom', 'disease', 'illness', 'injury', 'pain', 'wellness', 'fitness', 'exercise', 'nutrition', 'diet', 'mental', 'physical', 'healthcare', 'pharmaceutical', 'preventive'],
+    'education': ['school', 'university', 'college', 'student', 'teacher', 'professor', 'education', 'learning', 'study', 'course', 'class', 'lesson', 'homework', 'assignment', 'exam', 'test', 'grade', 'degree', 'diploma', 'certificate', 'academic', 'curriculum', 'syllabus', 'pedagogy', 'instruction', 'training'],
+    'personal': ['family', 'friend', 'relationship', 'personal', 'private', 'diary', 'journal', 'note', 'reminder', 'memory', 'photo', 'picture', 'vacation', 'travel', 'hobby', 'interest', 'goal', 'plan', 'dream', 'wish', 'hope', 'feeling', 'emotion', 'thoughts', 'lifestyle', 'social', 'community'],
+    'communication': ['email', 'message', 'letter', 'memo', 'report', 'document', 'presentation', 'meeting', 'conference', 'discussion', 'conversation', 'announcement', 'notification', 'correspondence', 'communication', 'newsletter', 'publication', 'article', 'blog', 'social', 'media'],
+    'project': ['project', 'task', 'milestone', 'deadline', 'schedule', 'timeline', 'plan', 'planning', 'goal', 'objective', 'deliverable', 'requirement', 'specification', 'proposal', 'scope', 'phase', 'progress', 'status', 'update', 'review', 'approval', 'completion']
+  };
+  
+  // Detect domain tags
+  const detectedTags: string[] = [];
+  const tagScores = new Map<string, number>();
+  
+  for (const [tag, keywords] of Object.entries(domainKeywords)) {
+    let score = 0;
+    for (const keyword of keywords) {
+      if (wordFreq.has(keyword)) {
+        score += wordFreq.get(keyword)! * (keyword.length > 4 ? 2 : 1); // Bonus for longer keywords
+      }
+    }
+    if (score > 0) {
+      tagScores.set(tag, score);
     }
   }
   
-  return foundTags;
+  // Sort by score and take top tags
+  const sortedTags = Array.from(tagScores.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([tag]) => tag);
+  
+  detectedTags.push(...sortedTags);
+  
+  // Extract high-frequency meaningful words as additional tags
+  const meaningfulWords = Array.from(wordFreq.entries())
+    .filter(([word, freq]) => freq >= 2 && word.length >= 4 && word.length <= 15)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([word]) => word);
+  
+  detectedTags.push(...meaningfulWords);
+  
+  // Remove duplicates and return
+  return [...new Set(detectedTags)].slice(0, 6);
 }
 
 async function identifyTagsWithAI(text: string, openAIApiKey: string): Promise<string[]> {
@@ -199,19 +246,8 @@ serve(async (req: Request) => {
       global: { fetch } 
     });
 
-    // Step 1: Identify tags using both keyword matching and AI (if available)
-    let identifiedTags: string[] = [];
-    
-    // Always use keyword matching as baseline
-    const keywordTags = await identifyTagsWithKeywords(file_text);
-    identifiedTags = [...keywordTags];
-    
-    // Use AI for additional tag identification if API key is available
-    if (OPENAI_API_KEY && file_text.length > 50) {
-      const aiTags = await identifyTagsWithAI(file_text, OPENAI_API_KEY);
-      // Combine AI tags with keyword tags, removing duplicates
-      identifiedTags = [...new Set([...identifiedTags, ...aiTags])];
-    }
+    // Extract tags using free keyword extraction algorithm
+    const identifiedTags = extractKeywordsAndTags(file_text);
     
     console.log(`Identified tags: ${identifiedTags.join(', ')}`);
     

@@ -66,7 +66,8 @@ serve(async (req: Request) => {
         storage_path,
         user_id,
         file_content (
-          indexed_text
+          indexed_text,
+          search_vector
         ),
         file_tags (
           tags (
@@ -80,7 +81,91 @@ serve(async (req: Request) => {
     // Add search filter if provided
     if (searchQuery && searchQuery.trim()) {
       const searchTerm = searchQuery.trim();
-      query = query.ilike('filename', `%${searchTerm}%`);
+      
+      // Use PostgreSQL full-text search on content combined with filename search
+      try {
+        const { data: searchResults, error: searchError } = await supabase
+          .from('files')
+          .select(`
+            id,
+            filename,
+            file_type,
+            size,
+            upload_date,
+            storage_path,
+            user_id,
+            file_content!inner (
+              indexed_text,
+              search_vector
+            ),
+            file_tags (
+              tags (
+                tag_name
+              )
+            )
+          `)
+          .or(`filename.ilike.%${searchTerm}%,file_content.search_vector.fts.${searchTerm}`)
+          .order('upload_date', { ascending: false })
+          .range(offset, offset + limit - 1);
+
+        if (!searchError && searchResults) {
+          // Transform search results and return early
+          const formattedFiles = searchResults.map(file => {
+            const content = Array.isArray(file.file_content)
+              ? file.file_content[0]?.indexed_text
+              : file.file_content?.indexed_text;
+            const tags = Array.isArray(file.file_tags)
+              ? file.file_tags.map((ft: any) => ft?.tags?.tag_name).filter(Boolean)
+              : [];
+            return {
+              id: file.id,
+              filename: file.filename,
+              file_type: file.file_type,
+              size: file.size,
+              upload_date: file.upload_date,
+              storage_path: file.storage_path,
+              user_id: file.user_id,
+              has_content: !!content,
+              content_preview: content ? String(content).substring(0, 150) + '...' : null,
+              tags,
+            };
+          });
+
+          // Get search count
+          const { count: searchCount } = await supabase
+            .from('files')
+            .select('*', { count: 'exact', head: true })
+            .or(`filename.ilike.%${searchTerm}%,file_content.search_vector.fts.${searchTerm}`);
+
+          console.log(`Search returned ${formattedFiles.length} files (total matches: ${searchCount || 'unknown'})`);
+
+          return new Response(
+            JSON.stringify({
+              success: true,
+              files: formattedFiles,
+              pagination: {
+                limit,
+                offset,
+                total: searchCount || 0,
+                has_more: searchCount ? (offset + limit) < searchCount : false
+              },
+              search_query: searchQuery
+            }), 
+            { 
+              status: 200, 
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+            }
+          );
+        } else {
+          console.error('Full-text search failed, falling back to filename search:', searchError);
+          // Fallback to filename-only search
+          query = query.ilike('filename', `%${searchTerm}%`);
+        }
+      } catch (searchErr) {
+        console.error('Search error, falling back to filename search:', searchErr);
+        // Fallback to filename-only search
+        query = query.ilike('filename', `%${searchTerm}%`);
+      }
     }
 
     const { data: files, error: filesError } = await query;
