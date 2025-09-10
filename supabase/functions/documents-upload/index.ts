@@ -28,6 +28,9 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 // Note: In edge runtime, worker is not used.
 import * as pdfjsLib from "https://esm.sh/pdfjs-dist@4.3.136/legacy/build/pdf.mjs";
 
+// Configure PDF.js for Deno environment
+pdfjsLib.GlobalWorkerOptions.workerSrc = "https://esm.sh/pdfjs-dist@4.3.136/legacy/build/pdf.worker.mjs";
+
 // Image OCR using Tesseract.js via esm.sh
 // This can be heavy; for production consider external OCR providers.
 import Tesseract from "https://esm.sh/tesseract.js@5.0.0";

@@ -81,8 +81,8 @@ serve(async (req: Request) => {
 
     // Add search filter if provided
     if (searchQuery && searchQuery.trim()) {
-      const searchPattern = `%${searchQuery.trim().toLowerCase()}%`;
-      query = query.or(`filename.ilike.${searchPattern},file_content.indexed_text.ilike.${searchPattern}`);
+      const searchTerm = searchQuery.trim();
+      query = query.or(`filename.ilike.%${searchTerm}%,file_content.indexed_text.ilike.%${searchTerm}%`);
     }
 
     const { data: files, error: filesError } = await query;
@@ -104,8 +104,8 @@ serve(async (req: Request) => {
       .select('*', { count: 'exact', head: true });
 
     if (searchQuery && searchQuery.trim()) {
-      const searchPattern = `%${searchQuery.trim().toLowerCase()}%`;
-      countQuery = countQuery.or(`filename.ilike.${searchPattern},file_content.indexed_text.ilike.${searchPattern}`);
+      const searchTerm = searchQuery.trim();
+      countQuery = countQuery.or(`filename.ilike.%${searchTerm}%,file_content.indexed_text.ilike.%${searchTerm}%`);
     }
 
     const { count, error: countError } = await countQuery;
