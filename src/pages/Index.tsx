@@ -1,11 +1,21 @@
+import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Upload, FileText, BarChart3, Brain, Zap } from "lucide-react";
 import ProjectStructure from "@/components/ProjectStructure";
+import { FileUpload } from "@/components/FileUpload";
+import { Document } from "@/types/atlas";
 import heroImage from "@/assets/atlas-hero.jpg";
 
 const Index = () => {
+  const [uploadedDocuments, setUploadedDocuments] = useState<Document[]>([]);
+
+  const handleUploadComplete = (documents: Document[]) => {
+    setUploadedDocuments(prev => [...prev, ...documents]);
+  };
+
   return (
     <div className="min-h-screen bg-background">
       {/* Hero Section */}
@@ -31,13 +41,26 @@ const Index = () => {
             </p>
             
             <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
-              <Button size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg">
-                <Upload className="mr-2 h-5 w-5" />
-                Upload Documents
-              </Button>
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg">
+                    <Upload className="mr-2 h-5 w-5" />
+                    Upload Documents
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle>Upload & Process Documents</DialogTitle>
+                  </DialogHeader>
+                  <FileUpload onUploadComplete={handleUploadComplete} />
+                </DialogContent>
+              </Dialog>
               <Button variant="outline" size="lg" className="border-primary/20 hover:bg-primary/5">
                 <BarChart3 className="mr-2 h-5 w-5" />
                 View Analytics
+                {uploadedDocuments.length > 0 && (
+                  <Badge className="ml-2">{uploadedDocuments.length}</Badge>
+                )}
               </Button>
             </div>
 
