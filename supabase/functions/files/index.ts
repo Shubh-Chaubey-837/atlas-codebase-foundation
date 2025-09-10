@@ -115,20 +115,26 @@ serve(async (req: Request) => {
     }
 
     // Transform results
-    const formattedFiles = (files || []).map(file => ({
-      id: file.id,
-      filename: file.filename,
-      file_type: file.file_type,
-      size: file.size,
-      upload_date: file.upload_date,
-      storage_path: file.storage_path,
-      user_id: file.user_id,
-      has_content: !!file.file_content?.indexed_text,
-      content_preview: file.file_content?.indexed_text 
-        ? file.file_content.indexed_text.substring(0, 150) + '...'
-        : null,
-      tags: file.file_tags?.map((ft: any) => ft.tags?.tag_name).filter(Boolean) || []
-    }));
+    const formattedFiles = (files || []).map(file => {
+      const content = Array.isArray(file.file_content)
+        ? file.file_content[0]?.indexed_text
+        : file.file_content?.indexed_text;
+      const tags = Array.isArray(file.file_tags)
+        ? file.file_tags.map((ft: any) => ft?.tags?.tag_name).filter(Boolean)
+        : [];
+      return {
+        id: file.id,
+        filename: file.filename,
+        file_type: file.file_type,
+        size: file.size,
+        upload_date: file.upload_date,
+        storage_path: file.storage_path,
+        user_id: file.user_id,
+        has_content: !!content,
+        content_preview: content ? String(content).substring(0, 150) + '...' : null,
+        tags,
+      };
+    });
 
     console.log(`Retrieved ${formattedFiles.length} files (total: ${count || 'unknown'})`);
 
