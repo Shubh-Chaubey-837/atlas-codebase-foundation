@@ -184,6 +184,54 @@ export class AtlasAPI {
     }
   }
 
+  // Auto-tagging functionality
+  static async autoTagFile(fileId: string): Promise<APIResponse<{ tags: string[], tag_count: number }>> {
+    try {
+      if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+        throw new Error('Supabase URL/Anon Key missing. Set them in src/lib/supabase-config.ts');
+      }
+
+      const url = `${SUPABASE_URL}/functions/v1/auto-tag-file`;
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+          apikey: SUPABASE_ANON_KEY,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ file_id: parseInt(fileId) }),
+      });
+
+      if (!response.ok) {
+        const text = await response.text();
+        console.error('Auto-tagging failed:', response.status, text);
+        throw new Error(text || `Auto-tagging failed: ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (data && data.success) {
+        return {
+          success: true,
+          data: {
+            tags: data.tags || [],
+            tag_count: data.tag_count || 0
+          },
+          message: data.message || 'File auto-tagged successfully'
+        };
+      } else {
+        throw new Error(data?.error || 'Auto-tagging failed');
+      }
+    } catch (error) {
+      console.error('Auto-tagging error:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to auto-tag file'
+      };
+    }
+  }
+
   // Dashboard Data
   static async getDashboardData(): Promise<APIResponse<any>> {
     try {

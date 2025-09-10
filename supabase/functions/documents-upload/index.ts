@@ -198,6 +198,32 @@ serve(async (req: Request) => {
         .insert({ file_id: fileId, indexed_text: extractedText });
       if (fcErr) {
         console.error("file_content insert failed", fcErr);
+      } else {
+        // Auto-tag the file after successful text extraction
+        try {
+          console.log(`Starting auto-tagging for file ${fileId}`);
+          const tagResponse = await fetch(`${SUPABASE_URL}/functions/v1/auto-tag-file`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              file_id: fileId,
+              file_text: extractedText
+            }),
+          });
+          
+          if (tagResponse.ok) {
+            const tagResult = await tagResponse.json();
+            console.log(`Auto-tagging completed for file ${fileId}:`, tagResult);
+          } else {
+            console.error(`Auto-tagging failed for file ${fileId}:`, tagResponse.status);
+          }
+        } catch (tagError) {
+          console.error(`Auto-tagging error for file ${fileId}:`, tagError);
+          // Don't fail the upload if tagging fails
+        }
       }
     }
 
